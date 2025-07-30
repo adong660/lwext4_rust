@@ -51,6 +51,8 @@ extern "C" {
 #include <ext4_oflags.h>
 #include <ext4_debug.h>
 
+#include <ext4_fs.h>
+#include <ext4_journal.h>
 #include <ext4_blockdev.h>
 
 /********************************OS LOCK INFERFACE***************************/
@@ -615,6 +617,113 @@ const ext4_direntry *ext4_dir_entry_next(ext4_dir *dir);
  *
  * @param   dir Directory handle.*/
 void ext4_dir_entry_rewind(ext4_dir *dir);
+
+/********************************INTERNAL OPERATIONS*************************/
+
+/**@brief   Mount point descriptor.*/
+struct ext4_mountpoint {
+
+	/**@brief   Mount done flag.*/
+	bool mounted;
+
+	/**@brief   Mount point name (@ref ext4_mount)*/
+	char name[CONFIG_EXT4_MAX_MP_NAME + 1];
+
+	/**@brief   OS dependent lock/unlock functions.*/
+	const struct ext4_lock *os_locks;
+
+	/**@brief   Ext4 filesystem internals.*/
+	struct ext4_fs fs;
+
+	/**@brief   JBD fs.*/
+	struct jbd_fs jbd_fs;
+
+	/**@brief   Journal.*/
+	struct jbd_journal jbd_journal;
+
+	/**@brief   Block cache.*/
+	struct ext4_bcache bc;
+};
+
+/**@brief   Mount point OS dependent lock*/
+#define EXT4_MP_LOCK(_m)                                                       \
+	do {                                                                   \
+		if ((_m)->os_locks)                                            \
+			(_m)->os_locks->lock();                                \
+	} while (0)
+
+/**@brief   Mount point OS dependent unlock*/
+#define EXT4_MP_UNLOCK(_m)                                                     \
+	do {                                                                   \
+		if ((_m)->os_locks)                                            \
+			(_m)->os_locks->unlock();                              \
+	} while (0)
+
+/**@brief   Get mount point from path.
+ * @param   path Path to get mount point for.
+ * @return  Mount point pointer or NULL if not found.*/
+struct ext4_mountpoint *ext4_get_mount(const char *path);
+
+/**@brief   Link operation for internal use.
+ * @param   mp Mount point.
+ * @param   parent Parent directory inode reference.
+ * @param   ch Child inode reference to link.
+ * @param   n Name to use for the link.
+ * @param   len Length of name.
+ * @param   rename Whether this is a rename operation.
+ * @return  Standard error code.*/
+int ext4_link(struct ext4_mountpoint *mp, struct ext4_inode_ref *parent,
+	      struct ext4_inode_ref *ch, const char *n,
+	      uint32_t len, bool rename);
+
+/**@brief   Unlink operation for internal use.
+ * @param   mp Mount point.
+ * @param   parent Parent directory inode reference.
+ * @param   child Child inode reference to unlink.
+ * @param   name Name of the entry to unlink.
+ * @param   name_len Length of name.
+ * @return  Standard error code.*/
+int ext4_unlink(struct ext4_mountpoint *mp,
+		struct ext4_inode_ref *parent,
+		struct ext4_inode_ref *child, const char *name,
+		uint32_t name_len);
+
+/**@brief   Truncate inode to specified size for internal use.
+ * @param   mp Mount point.
+ * @param   index Inode index to truncate.
+ * @param   new_size New size for the inode.
+ * @return  Standard error code.*/
+int ext4_trunc_inode(struct ext4_mountpoint *mp,
+		     uint32_t index, uint64_t new_size);
+
+/**@brief   Check if a directory has children for internal use.
+ * @param   has_children Output parameter indicating if directory has children.
+ * @param   enode Directory inode reference to check.
+ * @return  Standard error code.*/
+int ext4_has_children(bool *has_children, struct ext4_inode_ref *enode);
+
+/**@brief   Truncate directory for internal use.
+ * @param   mp Mount point.
+ * @param   parent Parent directory inode reference.
+ * @param   dir Directory inode reference to truncate.
+ * @return  Standard error code.*/
+int ext4_trunc_dir(struct ext4_mountpoint *mp,
+		   struct ext4_inode_ref *parent,
+		   struct ext4_inode_ref *dir);
+
+/**@brief   Transaction start for internal use.
+ * @param   mp Mount point.
+ * @return  Standard error code.*/
+int ext4_trans_start(struct ext4_mountpoint *mp);
+
+/**@brief   Transaction stop for internal use.
+ * @param   mp Mount point.
+ * @return  Standard error code.*/
+int ext4_trans_stop(struct ext4_mountpoint *mp);
+
+/**@brief   Transaction abort for internal use.
+ * @param   mp Mount point.*/
+void ext4_trans_abort(struct ext4_mountpoint *mp);
 
 
 #ifdef __cplusplus

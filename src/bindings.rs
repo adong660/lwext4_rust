@@ -85,6 +85,7 @@ pub const PTRDIFF_MIN: i64 = -9223372036854775808;
 pub const PTRDIFF_MAX: u64 = 9223372036854775807;
 pub const SIZE_MAX: i32 = -1;
 pub const CONFIG_USE_DEFAULT_CONFIG: u32 = 0;
+pub const CONFIG_JOURNALING_ENABLE: u32 = 0;
 pub const CONFIG_DEBUG_PRINTF: u32 = 1;
 pub const CONFIG_DEBUG_ASSERT: u32 = 1;
 pub const CONFIG_HAVE_OWN_OFLAGS: u32 = 1;
@@ -96,7 +97,6 @@ pub const F_SET_EXT2: u32 = 2;
 pub const F_SET_EXT3: u32 = 3;
 pub const F_SET_EXT4: u32 = 4;
 pub const CONFIG_EXT_FEATURE_SET_LVL: u32 = 4;
-pub const CONFIG_JOURNALING_ENABLE: u32 = 1;
 pub const CONFIG_XATTR_ENABLE: u32 = 1;
 pub const CONFIG_EXTENTS_ENABLE: u32 = 1;
 pub const CONFIG_BLOCK_DEV_ENABLE_STATS: u32 = 1;
@@ -566,6 +566,7 @@ pub struct ext4_buf {
     #[doc = "@brief   argument passed to end_write() callback."]
     pub end_write_arg: *mut ::core::ffi::c_void,
 }
+#[doc = "@brief   LBA tree node"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ext4_buf__bindgen_ty_1 {
@@ -574,6 +575,7 @@ pub struct ext4_buf__bindgen_ty_1 {
     pub rbe_parent: *mut ext4_buf,
     pub rbe_color: ::core::ffi::c_int,
 }
+#[doc = "@brief   LRU tree node"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ext4_buf__bindgen_ty_2 {
@@ -582,6 +584,7 @@ pub struct ext4_buf__bindgen_ty_2 {
     pub rbe_parent: *mut ext4_buf,
     pub rbe_color: ::core::ffi::c_int,
 }
+#[doc = "@brief   Dirty list node"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ext4_buf__bindgen_ty_3 {
@@ -1642,6 +1645,335 @@ unsafe extern "C" {
         arg3: *mut __va_list_tag,
     ) -> ::core::ffi::c_int;
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ext4_fs {
+    pub read_only: bool,
+    pub bdev: *mut ext4_blockdev,
+    pub sb: ext4_sblock,
+    pub inode_block_limits: [u64; 4usize],
+    pub inode_blocks_per_level: [u64; 4usize],
+    pub last_inode_bg_id: u32,
+    pub jbd_fs: *mut jbd_fs,
+    pub jbd_journal: *mut jbd_journal,
+    pub curr_trans: *mut jbd_trans,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ext4_block_group_ref {
+    pub block: ext4_block,
+    pub block_group: *mut ext4_bgroup,
+    pub fs: *mut ext4_fs,
+    pub index: u32,
+    pub dirty: bool,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ext4_inode_ref {
+    pub block: ext4_block,
+    pub inode: *mut ext4_inode,
+    pub fs: *mut ext4_fs,
+    pub index: u32,
+    pub dirty: bool,
+}
+unsafe extern "C" {
+    #[doc = "@brief Initialize filesystem and read all needed data.\n @param fs Filesystem instance to be initialized\n @param bdev Identifier if device with the filesystem\n @param read_only Mark the filesystem as read-only.\n @return Error code"]
+    pub fn ext4_fs_init(
+        fs: *mut ext4_fs,
+        bdev: *mut ext4_blockdev,
+        read_only: bool,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Destroy filesystem instance (used by unmount operation).\n @param fs Filesystem to be destroyed\n @return Error code"]
+    pub fn ext4_fs_fini(fs: *mut ext4_fs) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Check filesystem's features, if supported by this driver\n Function can return EOK and set read_only flag. It mean's that\n there are some not-supported features, that can cause problems\n during some write operations.\n @param fs        Filesystem to be checked\n @param read_only Flag if filesystem should be mounted only for reading\n @return Error code"]
+    pub fn ext4_fs_check_features(fs: *mut ext4_fs, read_only: *mut bool) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Get reference to block group specified by index.\n @param fs   Filesystem to find block group on\n @param bgid Index of block group to load\n @param ref  Output pointer for reference\n @return Error code"]
+    pub fn ext4_fs_get_block_group_ref(
+        fs: *mut ext4_fs,
+        bgid: u32,
+        ref_: *mut ext4_block_group_ref,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Put reference to block group.\n @param ref Pointer for reference to be put back\n @return Error code"]
+    pub fn ext4_fs_put_block_group_ref(ref_: *mut ext4_block_group_ref) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Get reference to i-node specified by index.\n @param fs    Filesystem to find i-node on\n @param index Index of i-node to load\n @param ref   Output pointer for reference\n @return Error code"]
+    pub fn ext4_fs_get_inode_ref(
+        fs: *mut ext4_fs,
+        index: u32,
+        ref_: *mut ext4_inode_ref,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Reset blocks field of i-node.\n @param fs        Filesystem to reset blocks field of i-inode on\n @param inode_ref ref Pointer for inode to be operated on"]
+    pub fn ext4_fs_inode_blocks_init(fs: *mut ext4_fs, inode_ref: *mut ext4_inode_ref);
+}
+unsafe extern "C" {
+    #[doc = "@brief Put reference to i-node.\n @param ref Pointer for reference to be put back\n @return Error code"]
+    pub fn ext4_fs_put_inode_ref(ref_: *mut ext4_inode_ref) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Convert filetype to inode mode.\n @param filetype File type\n @return inode mode"]
+    pub fn ext4_fs_correspond_inode_mode(filetype: ::core::ffi::c_int) -> u32;
+}
+unsafe extern "C" {
+    #[doc = "@brief Allocate new i-node in the filesystem.\n @param fs        Filesystem to allocated i-node on\n @param inode_ref Output pointer to return reference to allocated i-node\n @param filetype  File type of newly created i-node\n @return Error code"]
+    pub fn ext4_fs_alloc_inode(
+        fs: *mut ext4_fs,
+        inode_ref: *mut ext4_inode_ref,
+        filetype: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Release i-node and mark it as free.\n @param inode_ref I-node to be released\n @return Error code"]
+    pub fn ext4_fs_free_inode(inode_ref: *mut ext4_inode_ref) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Truncate i-node data blocks.\n @param inode_ref I-node to be truncated\n @param new_size  New size of inode (must be < current size)\n @return Error code"]
+    pub fn ext4_fs_truncate_inode(
+        inode_ref: *mut ext4_inode_ref,
+        new_size: u64,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Compute 'goal' for inode index\n @param inode_ref Reference to inode, to allocate block for\n @return goal"]
+    pub fn ext4_fs_inode_to_goal_block(inode_ref: *mut ext4_inode_ref) -> ext4_fsblk_t;
+}
+unsafe extern "C" {
+    #[doc = "@brief Compute 'goal' for allocation algorithm (For blockmap).\n @param inode_ref Reference to inode, to allocate block for\n @return error code"]
+    pub fn ext4_fs_indirect_find_goal(
+        inode_ref: *mut ext4_inode_ref,
+        goal: *mut ext4_fsblk_t,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Get physical block address by logical index of the block.\n @param inode_ref I-node to read block address from\n @param iblock            Logical index of block\n @param fblock            Output pointer for return physical\n                          block address\n @param support_unwritten Indicate whether unwritten block range\n                          is supported under the current context\n @return Error code"]
+    pub fn ext4_fs_get_inode_dblk_idx(
+        inode_ref: *mut ext4_inode_ref,
+        iblock: ext4_lblk_t,
+        fblock: *mut ext4_fsblk_t,
+        support_unwritten: bool,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Initialize a part of unwritten range of the inode.\n @param inode_ref I-node to proceed on.\n @param iblock    Logical index of block\n @param fblock    Output pointer for return physical block address\n @return Error code"]
+    pub fn ext4_fs_init_inode_dblk_idx(
+        inode_ref: *mut ext4_inode_ref,
+        iblock: ext4_lblk_t,
+        fblock: *mut ext4_fsblk_t,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief Append following logical block to the i-node.\n @param inode_ref I-node to append block to\n @param fblock    Output physical block address of newly allocated block\n @param iblock    Output logical number of newly allocated block\n @return Error code"]
+    pub fn ext4_fs_append_inode_dblk(
+        inode_ref: *mut ext4_inode_ref,
+        fblock: *mut ext4_fsblk_t,
+        iblock: *mut ext4_lblk_t,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief   Increment inode link count.\n @param   inode_ref none handle"]
+    pub fn ext4_fs_inode_links_count_inc(inode_ref: *mut ext4_inode_ref);
+}
+unsafe extern "C" {
+    #[doc = "@brief   Decrement inode link count.\n @param   inode_ref none handle"]
+    pub fn ext4_fs_inode_links_count_dec(inode_ref: *mut ext4_inode_ref);
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_fs {
+    pub bdev: *mut ext4_blockdev,
+    pub inode_ref: ext4_inode_ref,
+    pub sb: jbd_sb,
+    pub dirty: bool,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_buf {
+    pub jbd_lba: u32,
+    pub block: ext4_block,
+    pub trans: *mut jbd_trans,
+    pub block_rec: *mut jbd_block_rec,
+    pub buf_node: jbd_buf__bindgen_ty_1,
+    pub dirty_buf_node: jbd_buf__bindgen_ty_2,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_buf__bindgen_ty_1 {
+    pub tqe_next: *mut jbd_buf,
+    pub tqe_prev: *mut *mut jbd_buf,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_buf__bindgen_ty_2 {
+    pub tqe_next: *mut jbd_buf,
+    pub tqe_prev: *mut *mut jbd_buf,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_revoke_rec {
+    pub lba: ext4_fsblk_t,
+    pub revoke_node: jbd_revoke_rec__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_revoke_rec__bindgen_ty_1 {
+    pub rbe_left: *mut jbd_revoke_rec,
+    pub rbe_right: *mut jbd_revoke_rec,
+    pub rbe_parent: *mut jbd_revoke_rec,
+    pub rbe_color: ::core::ffi::c_int,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_block_rec {
+    pub lba: ext4_fsblk_t,
+    pub trans: *mut jbd_trans,
+    pub block_rec_node: jbd_block_rec__bindgen_ty_1,
+    pub tbrec_node: jbd_block_rec__bindgen_ty_2,
+    pub dirty_buf_queue: jbd_block_rec_jbd_buf_dirty,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_block_rec__bindgen_ty_1 {
+    pub rbe_left: *mut jbd_block_rec,
+    pub rbe_right: *mut jbd_block_rec,
+    pub rbe_parent: *mut jbd_block_rec,
+    pub rbe_color: ::core::ffi::c_int,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_block_rec__bindgen_ty_2 {
+    pub le_next: *mut jbd_block_rec,
+    pub le_prev: *mut *mut jbd_block_rec,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_block_rec_jbd_buf_dirty {
+    pub tqh_first: *mut jbd_buf,
+    pub tqh_last: *mut *mut jbd_buf,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_trans {
+    pub trans_id: u32,
+    pub start_iblock: u32,
+    pub alloc_blocks: ::core::ffi::c_int,
+    pub data_cnt: ::core::ffi::c_int,
+    pub data_csum: u32,
+    pub written_cnt: ::core::ffi::c_int,
+    pub error: ::core::ffi::c_int,
+    pub journal: *mut jbd_journal,
+    pub buf_queue: jbd_trans_jbd_trans_buf,
+    pub revoke_root: jbd_trans_jbd_revoke_tree,
+    pub tbrec_list: jbd_trans_jbd_trans_block_rec,
+    pub trans_node: jbd_trans__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_trans_jbd_trans_buf {
+    pub tqh_first: *mut jbd_buf,
+    pub tqh_last: *mut *mut jbd_buf,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_trans_jbd_revoke_tree {
+    pub rbh_root: *mut jbd_revoke_rec,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_trans_jbd_trans_block_rec {
+    pub lh_first: *mut jbd_block_rec,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_trans__bindgen_ty_1 {
+    pub tqe_next: *mut jbd_trans,
+    pub tqe_prev: *mut *mut jbd_trans,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_journal {
+    pub first: u32,
+    pub start: u32,
+    pub last: u32,
+    pub trans_id: u32,
+    pub alloc_trans_id: u32,
+    pub block_size: u32,
+    pub cp_queue: jbd_journal_jbd_cp_queue,
+    pub block_rec_root: jbd_journal_jbd_block,
+    pub jbd_fs: *mut jbd_fs,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_journal_jbd_cp_queue {
+    pub tqh_first: *mut jbd_trans,
+    pub tqh_last: *mut *mut jbd_trans,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct jbd_journal_jbd_block {
+    pub rbh_root: *mut jbd_block_rec,
+}
+unsafe extern "C" {
+    pub fn jbd_get_fs(fs: *mut ext4_fs, jbd_fs: *mut jbd_fs) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_put_fs(jbd_fs: *mut jbd_fs) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_inode_bmap(
+        jbd_fs: *mut jbd_fs,
+        iblock: ext4_lblk_t,
+        fblock: *mut ext4_fsblk_t,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_recover(jbd_fs: *mut jbd_fs) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_journal_start(jbd_fs: *mut jbd_fs, journal: *mut jbd_journal) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_journal_stop(journal: *mut jbd_journal) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_journal_new_trans(journal: *mut jbd_journal) -> *mut jbd_trans;
+}
+unsafe extern "C" {
+    pub fn jbd_trans_set_block_dirty(
+        trans: *mut jbd_trans,
+        block: *mut ext4_block,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_trans_revoke_block(trans: *mut jbd_trans, lba: ext4_fsblk_t) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_trans_try_revoke_block(
+        trans: *mut jbd_trans,
+        lba: ext4_fsblk_t,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_journal_free_trans(journal: *mut jbd_journal, trans: *mut jbd_trans, abort: bool);
+}
+unsafe extern "C" {
+    pub fn jbd_journal_commit_trans(
+        journal: *mut jbd_journal,
+        trans: *mut jbd_trans,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn jbd_journal_purge_cp_trans(journal: *mut jbd_journal, flush: bool, once: bool);
+}
 #[doc = "@brief   OS dependent lock interface."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -2000,147 +2332,145 @@ unsafe extern "C" {
     #[doc = "@brief   Rewine directory entry offset.\n\n @param   dir Directory handle."]
     pub fn ext4_dir_entry_rewind(dir: *mut ext4_dir);
 }
+#[doc = "@brief   Mount point descriptor."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct ext4_fs {
-    pub read_only: bool,
-    pub bdev: *mut ext4_blockdev,
-    pub sb: ext4_sblock,
-    pub inode_block_limits: [u64; 4usize],
-    pub inode_blocks_per_level: [u64; 4usize],
-    pub last_inode_bg_id: u32,
-    pub jbd_fs: *mut jbd_fs,
-    pub jbd_journal: *mut jbd_journal,
-    pub curr_trans: *mut jbd_trans,
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ext4_block_group_ref {
-    pub block: ext4_block,
-    pub block_group: *mut ext4_bgroup,
-    pub fs: *mut ext4_fs,
-    pub index: u32,
-    pub dirty: bool,
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ext4_inode_ref {
-    pub block: ext4_block,
-    pub inode: *mut ext4_inode,
-    pub fs: *mut ext4_fs,
-    pub index: u32,
-    pub dirty: bool,
+pub struct ext4_mountpoint {
+    #[doc = "@brief   Mount done flag."]
+    pub mounted: bool,
+    #[doc = "@brief   Mount point name (@ref ext4_mount)"]
+    pub name: [::core::ffi::c_char; 33usize],
+    #[doc = "@brief   OS dependent lock/unlock functions."]
+    pub os_locks: *const ext4_lock,
+    #[doc = "@brief   Ext4 filesystem internals."]
+    pub fs: ext4_fs,
+    #[doc = "@brief   JBD fs."]
+    pub jbd_fs: jbd_fs,
+    #[doc = "@brief   Journal."]
+    pub jbd_journal: jbd_journal,
+    #[doc = "@brief   Block cache."]
+    pub bc: ext4_bcache,
 }
 unsafe extern "C" {
-    #[doc = "@brief Initialize filesystem and read all needed data.\n @param fs Filesystem instance to be initialized\n @param bdev Identifier if device with the filesystem\n @param read_only Mark the filesystem as read-only.\n @return Error code"]
-    pub fn ext4_fs_init(
-        fs: *mut ext4_fs,
-        bdev: *mut ext4_blockdev,
-        read_only: bool,
+    #[doc = "@brief   Get mount point from path.\n @param   path Path to get mount point for.\n @return  Mount point pointer or NULL if not found."]
+    pub fn ext4_get_mount(path: *const ::core::ffi::c_char) -> *mut ext4_mountpoint;
+}
+unsafe extern "C" {
+    #[doc = "@brief   Link operation for internal use.\n @param   mp Mount point.\n @param   parent Parent directory inode reference.\n @param   ch Child inode reference to link.\n @param   n Name to use for the link.\n @param   len Length of name.\n @param   rename Whether this is a rename operation.\n @return  Standard error code."]
+    pub fn ext4_link(
+        mp: *mut ext4_mountpoint,
+        parent: *mut ext4_inode_ref,
+        ch: *mut ext4_inode_ref,
+        n: *const ::core::ffi::c_char,
+        len: u32,
+        rename: bool,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief Destroy filesystem instance (used by unmount operation).\n @param fs Filesystem to be destroyed\n @return Error code"]
-    pub fn ext4_fs_fini(fs: *mut ext4_fs) -> ::core::ffi::c_int;
-}
-unsafe extern "C" {
-    #[doc = "@brief Check filesystem's features, if supported by this driver\n Function can return EOK and set read_only flag. It mean's that\n there are some not-supported features, that can cause problems\n during some write operations.\n @param fs        Filesystem to be checked\n @param read_only Flag if filesystem should be mounted only for reading\n @return Error code"]
-    pub fn ext4_fs_check_features(fs: *mut ext4_fs, read_only: *mut bool) -> ::core::ffi::c_int;
-}
-unsafe extern "C" {
-    #[doc = "@brief Get reference to block group specified by index.\n @param fs   Filesystem to find block group on\n @param bgid Index of block group to load\n @param ref  Output pointer for reference\n @return Error code"]
-    pub fn ext4_fs_get_block_group_ref(
-        fs: *mut ext4_fs,
-        bgid: u32,
-        ref_: *mut ext4_block_group_ref,
+    #[doc = "@brief   Unlink operation for internal use.\n @param   mp Mount point.\n @param   parent Parent directory inode reference.\n @param   child Child inode reference to unlink.\n @param   name Name of the entry to unlink.\n @param   name_len Length of name.\n @return  Standard error code."]
+    pub fn ext4_unlink(
+        mp: *mut ext4_mountpoint,
+        parent: *mut ext4_inode_ref,
+        child: *mut ext4_inode_ref,
+        name: *const ::core::ffi::c_char,
+        name_len: u32,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief Put reference to block group.\n @param ref Pointer for reference to be put back\n @return Error code"]
-    pub fn ext4_fs_put_block_group_ref(ref_: *mut ext4_block_group_ref) -> ::core::ffi::c_int;
-}
-unsafe extern "C" {
-    #[doc = "@brief Get reference to i-node specified by index.\n @param fs    Filesystem to find i-node on\n @param index Index of i-node to load\n @param ref   Output pointer for reference\n @return Error code"]
-    pub fn ext4_fs_get_inode_ref(
-        fs: *mut ext4_fs,
+    #[doc = "@brief   Truncate inode to specified size for internal use.\n @param   mp Mount point.\n @param   index Inode index to truncate.\n @param   new_size New size for the inode.\n @return  Standard error code."]
+    pub fn ext4_trunc_inode(
+        mp: *mut ext4_mountpoint,
         index: u32,
-        ref_: *mut ext4_inode_ref,
-    ) -> ::core::ffi::c_int;
-}
-unsafe extern "C" {
-    #[doc = "@brief Reset blocks field of i-node.\n @param fs        Filesystem to reset blocks field of i-inode on\n @param inode_ref ref Pointer for inode to be operated on"]
-    pub fn ext4_fs_inode_blocks_init(fs: *mut ext4_fs, inode_ref: *mut ext4_inode_ref);
-}
-unsafe extern "C" {
-    #[doc = "@brief Put reference to i-node.\n @param ref Pointer for reference to be put back\n @return Error code"]
-    pub fn ext4_fs_put_inode_ref(ref_: *mut ext4_inode_ref) -> ::core::ffi::c_int;
-}
-unsafe extern "C" {
-    #[doc = "@brief Convert filetype to inode mode.\n @param filetype File type\n @return inode mode"]
-    pub fn ext4_fs_correspond_inode_mode(filetype: ::core::ffi::c_int) -> u32;
-}
-unsafe extern "C" {
-    #[doc = "@brief Allocate new i-node in the filesystem.\n @param fs        Filesystem to allocated i-node on\n @param inode_ref Output pointer to return reference to allocated i-node\n @param filetype  File type of newly created i-node\n @return Error code"]
-    pub fn ext4_fs_alloc_inode(
-        fs: *mut ext4_fs,
-        inode_ref: *mut ext4_inode_ref,
-        filetype: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-}
-unsafe extern "C" {
-    #[doc = "@brief Release i-node and mark it as free.\n @param inode_ref I-node to be released\n @return Error code"]
-    pub fn ext4_fs_free_inode(inode_ref: *mut ext4_inode_ref) -> ::core::ffi::c_int;
-}
-unsafe extern "C" {
-    #[doc = "@brief Truncate i-node data blocks.\n @param inode_ref I-node to be truncated\n @param new_size  New size of inode (must be < current size)\n @return Error code"]
-    pub fn ext4_fs_truncate_inode(
-        inode_ref: *mut ext4_inode_ref,
         new_size: u64,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief Compute 'goal' for inode index\n @param inode_ref Reference to inode, to allocate block for\n @return goal"]
-    pub fn ext4_fs_inode_to_goal_block(inode_ref: *mut ext4_inode_ref) -> ext4_fsblk_t;
-}
-unsafe extern "C" {
-    #[doc = "@brief Compute 'goal' for allocation algorithm (For blockmap).\n @param inode_ref Reference to inode, to allocate block for\n @return error code"]
-    pub fn ext4_fs_indirect_find_goal(
-        inode_ref: *mut ext4_inode_ref,
-        goal: *mut ext4_fsblk_t,
+    #[doc = "@brief   Check if a directory has children for internal use.\n @param   has_children Output parameter indicating if directory has children.\n @param   enode Directory inode reference to check.\n @return  Standard error code."]
+    pub fn ext4_has_children(
+        has_children: *mut bool,
+        enode: *mut ext4_inode_ref,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief Get physical block address by logical index of the block.\n @param inode_ref I-node to read block address from\n @param iblock            Logical index of block\n @param fblock            Output pointer for return physical\n                          block address\n @param support_unwritten Indicate whether unwritten block range\n                          is supported under the current context\n @return Error code"]
-    pub fn ext4_fs_get_inode_dblk_idx(
-        inode_ref: *mut ext4_inode_ref,
-        iblock: ext4_lblk_t,
-        fblock: *mut ext4_fsblk_t,
-        support_unwritten: bool,
+    #[doc = "@brief   Truncate directory for internal use.\n @param   mp Mount point.\n @param   parent Parent directory inode reference.\n @param   dir Directory inode reference to truncate.\n @return  Standard error code."]
+    pub fn ext4_trunc_dir(
+        mp: *mut ext4_mountpoint,
+        parent: *mut ext4_inode_ref,
+        dir: *mut ext4_inode_ref,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief Initialize a part of unwritten range of the inode.\n @param inode_ref I-node to proceed on.\n @param iblock    Logical index of block\n @param fblock    Output pointer for return physical block address\n @return Error code"]
-    pub fn ext4_fs_init_inode_dblk_idx(
-        inode_ref: *mut ext4_inode_ref,
-        iblock: ext4_lblk_t,
-        fblock: *mut ext4_fsblk_t,
+    #[doc = "@brief   Transaction start for internal use.\n @param   mp Mount point.\n @return  Standard error code."]
+    pub fn ext4_trans_start(mp: *mut ext4_mountpoint) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief   Transaction stop for internal use.\n @param   mp Mount point.\n @return  Standard error code."]
+    pub fn ext4_trans_stop(mp: *mut ext4_mountpoint) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief   Transaction abort for internal use.\n @param   mp Mount point."]
+    pub fn ext4_trans_abort(mp: *mut ext4_mountpoint);
+}
+unsafe extern "C" {
+    #[doc = "@brief   Create a file by taking a parent inode reference.\n\n @param   mp Mount point.\n @param   parent_ref Parent directory inode reference.\n @param   name File name to create.\n @param   name_len Length of file name.\n @param   mode File mode including type bits and permission bits (e.g., EXT4_INODE_MODE_FILE | 0644).\n @param   child_ref Output parameter for created file's inode reference.\n\n @return  Standard error code."]
+    pub fn ext4_inode_create_file(
+        mp: *mut ext4_mountpoint,
+        parent_ref: *mut ext4_inode_ref,
+        name: *const ::core::ffi::c_char,
+        name_len: u32,
+        mode: u32,
+        child_ref: *mut ext4_inode_ref,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief Append following logical block to the i-node.\n @param inode_ref I-node to append block to\n @param fblock    Output physical block address of newly allocated block\n @param iblock    Output logical number of newly allocated block\n @return Error code"]
-    pub fn ext4_fs_append_inode_dblk(
-        inode_ref: *mut ext4_inode_ref,
-        fblock: *mut ext4_fsblk_t,
-        iblock: *mut ext4_lblk_t,
+    #[doc = "@brief   Unlink a file or directory.\n\n @param   mp Mount point.\n @param   parent_ref Parent directory inode reference.\n @param   name Name of the entry to unlink.\n @param   name_len Length of the name.\n\n @return  Standard error code."]
+    pub fn ext4_inode_unlink(
+        mp: *mut ext4_mountpoint,
+        parent_ref: *mut ext4_inode_ref,
+        name: *const ::core::ffi::c_char,
+        name_len: u32,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief   Increment inode link count.\n @param   inode_ref none handle"]
-    pub fn ext4_fs_inode_links_count_inc(inode_ref: *mut ext4_inode_ref);
+    #[doc = "@brief   Look for a child directory entry by name in the given inode.\n\n @param   parent_ref Parent directory inode reference.\n @param   name Name of child to find.\n @param   name_len Length of name.\n @param   child_inode Output parameter for child inode number.\n @param   child_type Output parameter for child type (optional, can be NULL).\n\n @return  Standard error code."]
+    pub fn ext4_inode_find_child(
+        parent_ref: *mut ext4_inode_ref,
+        name: *const ::core::ffi::c_char,
+        name_len: u32,
+        child_inode: *mut u32,
+        child_type: *mut u8,
+    ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    #[doc = "@brief   Decrement inode link count.\n @param   inode_ref none handle"]
-    pub fn ext4_fs_inode_links_count_dec(inode_ref: *mut ext4_inode_ref);
+    #[doc = "@brief   Open a file given the inode reference.\n\n @param   file File handle to initialize.\n @param   mp Mount point.\n @param   inode_ref Inode reference to open.\n @param   flags Open flags.\n\n @return  Standard error code."]
+    pub fn ext4_inode_fopen(
+        file: *mut ext4_file,
+        mp: *mut ext4_mountpoint,
+        inode_ref: *mut ext4_inode_ref,
+        flags: u32,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief   Rename (move) a file or directory using inode references.\n\n @param   mp Mount point.\n @param   old_parent_ref Parent directory inode reference of the source.\n @param   old_name Current name of the file/directory.\n @param   old_name_len Length of current name.\n @param   new_parent_ref Parent directory inode reference of the destination.\n @param   new_name New name for the file/directory.\n @param   new_name_len Length of new name.\n\n @return  Standard error code."]
+    pub fn ext4_inode_rename(
+        mp: *mut ext4_mountpoint,
+        old_parent_ref: *mut ext4_inode_ref,
+        old_name: *const ::core::ffi::c_char,
+        old_name_len: u32,
+        new_parent_ref: *mut ext4_inode_ref,
+        new_name: *const ::core::ffi::c_char,
+        new_name_len: u32,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    #[doc = "@brief   Create a hard link to a file using inode references.\n\n @param   mp Mount point.\n @param   target_ref Inode reference of the file to link to.\n @param   link_parent_ref Parent directory inode reference for the new link.\n @param   link_name Name for the new link.\n @param   link_name_len Length of link name.\n\n @return  Standard error code."]
+    pub fn ext4_inode_hardlink(
+        mp: *mut ext4_mountpoint,
+        target_ref: *mut ext4_inode_ref,
+        link_parent_ref: *mut ext4_inode_ref,
+        link_name: *const ::core::ffi::c_char,
+        link_name_len: u32,
+    ) -> ::core::ffi::c_int;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -2255,40 +2585,4 @@ pub struct __va_list_tag {
     pub fp_offset: ::core::ffi::c_uint,
     pub overflow_arg_area: *mut ::core::ffi::c_void,
     pub reg_save_area: *mut ::core::ffi::c_void,
-}
-#[doc = "@brief   Mount point handle."]
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ext4_mountpoint {
-    /**@brief   Mount done flag.*/
-    pub mounted: ::core::ffi::c_char,
-    /**@brief   Mount point name (@ref ext4_mount)*/
-    pub name: [::core::ffi::c_char; (CONFIG_EXT4_MAX_MP_NAME + 1) as usize],
-    /**@brief   OS dependent lock/unlock functions.*/
-    pub os_locks: *mut ext4_lock,
-    /**@brief   Ext4 filesystem internals.*/
-    pub fs: ext4_fs,
-    /*/**@brief   JBD fs.*/*/
-    /*struct jbd_fs jbd_fs;*/
-    /**/
-    /*/**@brief   Journal.*/*/
-    /*struct jbd_journal jbd_journal;*/
-    /**/
-    /*/**@brief   Block cache.*/*/
-    /*struct ext4_bcache bc;*/
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct jbd_fs {
-    pub _address: u8,
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct jbd_journal {
-    pub _address: u8,
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct jbd_trans {
-    pub _address: u8,
 }
