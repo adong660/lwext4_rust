@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2013 Grzegorz Kostka (kostka.grzegorz@gmail.com)
+ * Copyright (c) 2025 WANG Junyang (adong660@gmail.com)
  *
+ * Copyright (c) 2013 Grzegorz Kostka (kostka.grzegorz@gmail.com)
  *
  * HelenOS:
  * Copyright (c) 2012 Martin Sucha
@@ -692,7 +693,7 @@ static uint32_t ext4_fs_inode_checksum(struct ext4_inode_ref *inode_ref)
 #define ext4_fs_inode_checksum(...) 0
 #endif
 
-static void ext4_fs_set_inode_checksum(struct ext4_inode_ref *inode_ref)
+void ext4_fs_set_inode_checksum(struct ext4_inode_ref *inode_ref)
 {
 	struct ext4_sblock *sb = &inode_ref->fs->sb;
 	if (!ext4_sb_feature_ro_com(sb, EXT4_FRO_COM_METADATA_CSUM))

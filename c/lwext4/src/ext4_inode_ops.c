@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 lwext4_rust project
+ * Copyright (c) 2025 WANG Junyang (adong660@gmail.com)
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -81,6 +81,11 @@ int ext4_inode_create_file(struct ext4_mountpoint *mp,
 	if (!ext4_inode_is_type(&fs->sb, parent_ref->inode, EXT4_INODE_MODE_DIRECTORY))
 		return ENOTDIR;
 
+	/* Start transaction */
+	r = ext4_trans_start(mp);
+	if (r != EOK)
+		return r;
+
 	/* Determine if we're creating a directory or not for allocation purposes */
 	bool is_directory = (mode & EXT4_INODE_MODE_TYPE_MASK) == EXT4_INODE_MODE_DIRECTORY;
 	int filetype = is_directory ? EXT4_DE_DIR : EXT4_DE_REG_FILE;
@@ -88,7 +93,7 @@ int ext4_inode_create_file(struct ext4_mountpoint *mp,
 	/* Allocate new inode */
 	r = ext4_fs_alloc_inode(fs, child_ref, filetype);
 	if (r != EOK)
-		return r;
+		goto Finish;
 
 	/* Set the exact file mode specified by caller */
 	ext4_inode_set_mode(&fs->sb, child_ref->inode, mode);
@@ -106,10 +111,24 @@ int ext4_inode_create_file(struct ext4_mountpoint *mp,
 		   But block has to be released. */
 		child_ref->dirty = false;
 		ext4_fs_put_inode_ref(child_ref);
-		return r;
+		goto Finish;
 	}
 
-	return EOK;
+	/* Flush the created child inode to disk */
+	r = ext4_inode_flush_ref(child_ref);
+	if (r != EOK)
+		goto Finish;
+
+	/* Flush the parent directory inode to disk */
+	r = ext4_inode_flush_ref(parent_ref);
+
+Finish:
+	if (r != EOK)
+		ext4_trans_abort(mp);
+	else
+		ext4_trans_stop(mp);
+
+	return r;
 }
 
 int ext4_inode_unlink(struct ext4_mountpoint *mp,
@@ -137,15 +156,20 @@ int ext4_inode_unlink(struct ext4_mountpoint *mp,
 	if (!ext4_inode_is_type(&fs->sb, parent_ref->inode, EXT4_INODE_MODE_DIRECTORY))
 		return ENOTDIR;
 
+	/* Start transaction */
+	r = ext4_trans_start(mp);
+	if (r != EOK)
+		return r;
+
 	/* Find the child entry in the parent directory */
 	r = ext4_inode_find_child(parent_ref, name, name_len, &child_inode, &child_type);
 	if (r != EOK)
-		return r;
+		goto Finish;
 
 	/* Get the child inode reference */
 	r = ext4_fs_get_inode_ref(fs, child_inode, &child_ref);
 	if (r != EOK)
-		return r;
+		goto Finish;
 
 	/* Check if it's a directory and if it has children */
 	is_dir = ext4_inode_is_type(&fs->sb, child_ref.inode, EXT4_INODE_MODE_DIRECTORY);
@@ -154,13 +178,14 @@ int ext4_inode_unlink(struct ext4_mountpoint *mp,
 		r = ext4_has_children(&has_children, &child_ref);
 		if (r != EOK) {
 			ext4_fs_put_inode_ref(&child_ref);
-			return r;
+			goto Finish;
 		}
 
 		/* Cannot unlink non-empty directory */
 		if (has_children) {
 			ext4_fs_put_inode_ref(&child_ref);
-			return ENOTEMPTY;
+			r = ENOTEMPTY;
+			goto Finish;
 		}
 	}
 
@@ -179,7 +204,7 @@ int ext4_inode_unlink(struct ext4_mountpoint *mp,
 		if (r != EOK) {
 			ext4_block_cache_write_back(fs->bdev, 0);
 			ext4_fs_put_inode_ref(&child_ref);
-			return r;
+			goto Finish;
 		}
 
 		ext4_block_cache_write_back(fs->bdev, 0);
@@ -189,7 +214,7 @@ int ext4_inode_unlink(struct ext4_mountpoint *mp,
 	r = ext4_unlink(mp, parent_ref, &child_ref, name, name_len);
 	if (r != EOK) {
 		ext4_fs_put_inode_ref(&child_ref);
-		return r;
+		goto Finish;
 	}
 
 	/* If link count is now zero, free the inode */
@@ -200,14 +225,25 @@ int ext4_inode_unlink(struct ext4_mountpoint *mp,
 		if (r != EOK) {
 			/* Put the reference but ignore errors since we're already failing */
 			ext4_fs_put_inode_ref(&child_ref);
-			return r;
+			goto Finish;
 		}
 
 		/* Note: ext4_fs_free_inode puts the inode reference for us */
 	} else {
 		/* Put the reference if not freed */
 		r = ext4_fs_put_inode_ref(&child_ref);
+		if (r != EOK)
+			goto Finish;
 	}
+
+	/* Flush the parent directory inode to disk */
+	r = ext4_inode_flush_ref(parent_ref);
+
+Finish:
+	if (r != EOK)
+		ext4_trans_abort(mp);
+	else
+		ext4_trans_stop(mp);
 
 	return r;
 }
@@ -290,15 +326,20 @@ int ext4_inode_rename(struct ext4_mountpoint *mp,
 	    !ext4_inode_is_type(&fs->sb, new_parent_ref->inode, EXT4_INODE_MODE_DIRECTORY))
 		return ENOTDIR;
 
+	/* Start transaction */
+	r = ext4_trans_start(mp);
+	if (r != EOK)
+		return r;
+
 	/* Find the source file */
 	r = ext4_inode_find_child(old_parent_ref, old_name, old_name_len, &child_inode, &child_type);
 	if (r != EOK)
-		return r;
+		goto Finish;
 
 	/* Get the source file inode reference */
 	r = ext4_fs_get_inode_ref(fs, child_inode, &child_ref);
 	if (r != EOK)
-		return r;
+		goto Finish;
 
 	/* Check if target already exists */
 	r = ext4_inode_find_child(new_parent_ref, new_name, new_name_len, &existing_inode, &existing_type);
@@ -307,14 +348,14 @@ int ext4_inode_rename(struct ext4_mountpoint *mp,
 		if (existing_inode == child_inode) {
 			/* Same file, nothing to do */
 			ext4_fs_put_inode_ref(&child_ref);
-			return EOK;
+			goto Success;
 		}
 
 		/* Different file exists - remove it first */
 		r = ext4_fs_get_inode_ref(fs, existing_inode, &existing_ref);
 		if (r != EOK) {
 			ext4_fs_put_inode_ref(&child_ref);
-			return r;
+			goto Finish;
 		}
 
 		/* Check type compatibility between source and target */
@@ -325,14 +366,16 @@ int ext4_inode_rename(struct ext4_mountpoint *mp,
 			/* Source is directory, target is not */
 			ext4_fs_put_inode_ref(&existing_ref);
 			ext4_fs_put_inode_ref(&child_ref);
-			return ENOTDIR;
+			r = ENOTDIR;
+			goto Finish;
 		}
 
 		if (!source_is_dir && target_is_dir) {
 			/* Source is not directory, target is */
 			ext4_fs_put_inode_ref(&existing_ref);
 			ext4_fs_put_inode_ref(&child_ref);
-			return EISDIR;
+			r = EISDIR;
+			goto Finish;
 		}
 
 		/* If target is a directory, check if it's empty */
@@ -342,14 +385,15 @@ int ext4_inode_rename(struct ext4_mountpoint *mp,
 			if (r != EOK) {
 				ext4_fs_put_inode_ref(&existing_ref);
 				ext4_fs_put_inode_ref(&child_ref);
-				return r;
+				goto Finish;
 			}
 
 			if (has_children) {
 				/* Target directory is not empty */
 				ext4_fs_put_inode_ref(&existing_ref);
 				ext4_fs_put_inode_ref(&child_ref);
-				return ENOTEMPTY;
+				r = ENOTEMPTY;
+				goto Finish;
 			}
 		}
 
@@ -358,21 +402,21 @@ int ext4_inode_rename(struct ext4_mountpoint *mp,
 		if (r != EOK) {
 			ext4_fs_put_inode_ref(&existing_ref);
 			ext4_fs_put_inode_ref(&child_ref);
-			return r;
+			goto Finish;
 		}
 
 		ext4_fs_put_inode_ref(&existing_ref);
 	} else if (r != ENOENT) {
 		/* Error other than "not found" */
 		ext4_fs_put_inode_ref(&child_ref);
-		return r;
+		goto Finish;
 	}
 
 	/* Create the new link */
 	r = ext4_link(mp, new_parent_ref, &child_ref, new_name, new_name_len, true);
 	if (r != EOK) {
 		ext4_fs_put_inode_ref(&child_ref);
-		return r;
+		goto Finish;
 	}
 
 	/* Remove the old link */
@@ -381,7 +425,7 @@ int ext4_inode_rename(struct ext4_mountpoint *mp,
 		/* Try to undo the new link creation, but don't fail if it doesn't work */
 		ext4_dir_remove_entry(new_parent_ref, new_name, new_name_len);
 		ext4_fs_put_inode_ref(&child_ref);
-		return r;
+		goto Finish;
 	}
 
 	/* Update parent link counts if moving a directory */
@@ -395,7 +439,28 @@ int ext4_inode_rename(struct ext4_mountpoint *mp,
 	}
 
 	ext4_fs_put_inode_ref(&child_ref);
-	return EOK;
+
+	/* Flush parent directories to disk */
+	r = ext4_inode_flush_ref(old_parent_ref);
+	if (r != EOK)
+		goto Finish;
+
+	if (old_parent_ref->index != new_parent_ref->index) {
+		r = ext4_inode_flush_ref(new_parent_ref);
+		if (r != EOK)
+			goto Finish;
+	}
+
+Success:
+	r = EOK;
+
+Finish:
+	if (r != EOK)
+		ext4_trans_abort(mp);
+	else
+		ext4_trans_stop(mp);
+
+	return r;
 }
 
 int ext4_inode_hardlink(struct ext4_mountpoint *mp,
@@ -426,19 +491,62 @@ int ext4_inode_hardlink(struct ext4_mountpoint *mp,
 	if (ext4_inode_is_type(&fs->sb, target_ref->inode, EXT4_INODE_MODE_DIRECTORY))
 		return EPERM;
 
+	/* Start transaction */
+	r = ext4_trans_start(mp);
+	if (r != EOK)
+		return r;
+
 	/* Check if target name already exists */
 	r = ext4_inode_find_child(link_parent_ref, link_name, link_name_len, &existing_inode, &existing_type);
 	if (r == EOK) {
 		/* Target exists, do nothing */
-		return EOK;
+		goto Success;
 	} else if (r != ENOENT) {
 		/* Error other than "not found" */
-		return r;
+		goto Finish;
 	}
 
 	/* Create the hard link */
 	r = ext4_link(mp, link_parent_ref, target_ref, link_name, link_name_len, false);
+	if (r != EOK)
+		goto Finish;
+
+	/* Flush both target and parent inodes to disk */
+	r = ext4_inode_flush_ref(target_ref);
+	if (r != EOK)
+		goto Finish;
+
+	r = ext4_inode_flush_ref(link_parent_ref);
+
+Success:
+	if (r == EOK)
+		r = EOK;  /* Ensure success code */
+
+Finish:
+	if (r != EOK)
+		ext4_trans_abort(mp);
+	else
+		ext4_trans_stop(mp);
+
 	return r;
+}
+
+/********************************HELPER FUNCTIONS****************************/
+
+int ext4_inode_flush_ref(struct ext4_inode_ref *ref)
+{
+	ext4_assert(ref);
+
+	if (ref->dirty) {
+		ext4_fs_set_inode_checksum(ref);
+		ext4_trans_set_block_dirty(ref->block.buf);
+
+		int r = ext4_block_flush_buf(ref->fs->bdev, ref->block.buf);
+		if (r != EOK)
+			return r;
+	}
+
+	return EOK;
 }
 
 /**

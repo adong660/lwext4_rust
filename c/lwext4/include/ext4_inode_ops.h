@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 lwext4_rust project
+ * Copyright (c) 2025 WANG Junyang (adong660@gmail.com)
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -137,6 +137,15 @@ int ext4_inode_hardlink(struct ext4_mountpoint *mp,
 			struct ext4_inode_ref *target_ref,
 			struct ext4_inode_ref *link_parent_ref,
 			const char *link_name, uint32_t link_name_len);
+
+/********************************HELPER FUNCTIONS****************************/
+
+/**@brief   Flush dirty inode data to disk.
+ *
+ * @param   ref Inode reference that may be dirty.
+ *
+ * @return  Standard error code.*/
+int ext4_inode_flush_ref(struct ext4_inode_ref *ref);
 
 #ifdef __cplusplus
 }

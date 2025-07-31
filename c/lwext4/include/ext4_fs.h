@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2013 Grzegorz Kostka (kostka.grzegorz@gmail.com)
+ * Copyright (c) 2025 WANG Junyang (adong660@gmail.com)
  *
+ * Copyright (c) 2013 Grzegorz Kostka (kostka.grzegorz@gmail.com)
  *
  * HelenOS:
  * Copyright (c) 2012 Martin Sucha
@@ -267,6 +268,11 @@ void ext4_fs_inode_links_count_inc(struct ext4_inode_ref *inode_ref);
  * @param   inode_ref none handle
  */
 void ext4_fs_inode_links_count_dec(struct ext4_inode_ref *inode_ref);
+
+/**@brief   Set inode checksum.
+ * @param   inode_ref inode handle
+ */
+void ext4_fs_set_inode_checksum(struct ext4_inode_ref *inode_ref);
 
 #ifdef __cplusplus
 }

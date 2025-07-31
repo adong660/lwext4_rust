@@ -46,20 +46,20 @@ fn main() {
             .status()
             .expect("failed to execute process: make lwext4");
         assert!(status.success());
+    }
 
-        if !Path::new("src/bindings.rs").exists() {
-            let cc = &format!("{}-linux-musl-gcc", arch);
-            let output = Command::new(cc)
-                .args(["-print-sysroot"])
-                .output()
-                .expect("failed to execute process: gcc -print-sysroot");
+    if !Path::new("src/bindings.rs").exists() {
+        let cc = &format!("{}-linux-musl-gcc", arch);
+        let output = Command::new(cc)
+            .args(["-print-sysroot"])
+            .output()
+            .expect("failed to execute process: gcc -print-sysroot");
 
-            let sysroot = core::str::from_utf8(&output.stdout).unwrap();
-            let sysroot = sysroot.trim_end();
-            let sysroot_inc = &format!("-I{}/include/", sysroot);
+        let sysroot = core::str::from_utf8(&output.stdout).unwrap();
+        let sysroot = sysroot.trim_end();
+        let sysroot_inc = &format!("-I{}/include/", sysroot);
 
-            generates_bindings_to_rust(sysroot_inc);
-        }
+        generates_bindings_to_rust(sysroot_inc);
     }
 
     /* No longer need to implement the libc.a
