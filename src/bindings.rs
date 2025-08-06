@@ -2476,10 +2476,6 @@ unsafe extern "C" {
         link_name_len: u32,
     ) -> ::core::ffi::c_int;
 }
-unsafe extern "C" {
-    #[doc = "@brief   Flush dirty inode data to disk.\n\n @param   ref Inode reference that may be dirty.\n\n @return  Standard error code."]
-    pub fn ext4_inode_flush_ref(ref_: *mut ext4_inode_ref) -> ::core::ffi::c_int;
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ext4_mkfs_info {
